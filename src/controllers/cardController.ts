@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { insert as insertCard, update as cardUpdate } from '../repositories/cardRepository';
-import { newBuyService, activateCardService, getCardBalance, blockCardService, unBlockCardService, chargeCardService } from '../services/cardServices';
+import { onlineBuyService, newBuyService, activateCardService, getCardBalance, blockCardService, unBlockCardService, chargeCardService } from '../services/cardServices';
 
 export async function insertNewCard(req: Request, res: Response) {
 
@@ -25,8 +25,6 @@ export async function activateCard(req: Request, res: Response) {
         const { cardId, password }: {cardId: number, password: string} = await activateCardService(req, res);
 
         await cardUpdate(cardId, { password });
-
-        res.status(200).send("Card activated");
 
     } catch (error) {
 
@@ -100,6 +98,20 @@ export async function buyWithCard(req: Request, res: Response) {
         await newBuyService(req, res);
 
         console.log("?")
+
+    } catch (error) {
+
+        res.status(500).send("Internal server error");
+
+    } 
+
+}
+
+export async function buyOnline(req: Request, res: Response) {
+
+    try {
+
+        await onlineBuyService(req, res);
 
     } catch (error) {
 

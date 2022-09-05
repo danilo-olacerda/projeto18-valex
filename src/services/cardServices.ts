@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { findByApiKey } from "../repositories/companyRepository";
 import { findById } from "../repositories/employeeRepository";
-import { findById as findCardById, update as cardUpdate } from "../repositories/cardRepository";
+import { findById as findCardById, update as cardUpdate, findByCardDetails } from "../repositories/cardRepository";
 import { findByCardId as findRecharges } from "../repositories/rechargeRepository";
 import { findByCardId as findPayments, PaymentInsertData, insert as paymentInsert } from "../repositories/paymentRepository";
 import { faker } from '@faker-js/faker';
@@ -102,7 +102,7 @@ export async function activateCardService(req: Request, res: Response): Promise<
 
         password = await bcrypt.hash(password, 10);
 
-        return { cardId, password };
+        return res.status(200).send("Card activated");
 
     } catch (error) {
 
@@ -329,6 +329,67 @@ export async function newBuyService(req: Request, res: Response){
         await paymentInsert(newPayment);
 
         return res.status(200).send("Payment done");
+
+    } catch (error) {
+
+        return res.status(500).send("Internal server error");
+
+    }
+    
+}
+
+export async function onlineBuyService(req: Request, res: Response){
+
+    try {
+
+        const { cardNumber, cardHolder, expirationDate, securityCode, amount, businessId } = res.locals;
+
+        const card = await findByCardDetails(cardNumber, cardHolder, expirationDate);
+
+        if (!card) {
+            return res.status(404).send("Card not found");
+        }
+
+        if (!card.password){
+            return res.status(401).send("Card not activated");
+        }
+
+        if (dayjs().format("MM/YYYY") > dayjs(card.expirationDate).format("MM/YYYY")){
+            return res.status(401).send("Card expired");
+        }
+
+        if (card.isBlocked){
+            return res.status(401).send("Card blocked");
+        }
+
+        const cryptr = new Cryptr("salt");
+        const decryptedCVC = cryptr.decrypt(card.securityCode);
+
+        if (decryptedCVC !== securityCode) {
+            return res.status(401).send("Invalid CVC");
+        }
+
+        const balance = await calculateCardBalance(card.id);
+
+        if (balance < amount) {
+            return res.status(401).send("Insufficient balance");
+        }
+
+        const business = await findBusinessById(businessId);
+
+        if (card.type !== business.type){
+            return res.status(401).send("Invalid card type");
+        }
+
+        const newPayment: PaymentInsertData = {
+            cardId: card.id,
+            amount,
+            businessId
+        }
+
+        await paymentInsert(newPayment);
+
+        return res.status(200).send("Online Payment done");
 
     } catch (error) {
 
